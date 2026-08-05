@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>勞報單填寫工具</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">勞報單填寫工具</div>
+  <div class="topbar-actions">
+    <label class="btn btn-ghost">
+      開啟 PDF
+      <input type="file" id="pdfInput" accept="application/pdf" hidden>
+    </label>
+    <button class="btn btn-ghost" id="clearMarksBtn" disabled>清空這份填寫</button>
+    <button class="btn btn-primary" id="exportBtn" disabled>輸出 PDF</button>
+  </div>
+</header>
+
+<div class="layout">
+
+  <aside class="sidebar">
+
+    <section class="panel panel-lead">
+      <p class="lead">在 PDF 上<strong>點一下就能打字</strong>。<br>打完點空白處結束，空的會自己消失。</p>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>常用資料</h2>
+        <button class="link-btn" id="addFieldBtn">＋ 新增欄位</button>
+      </div>
+      <p class="hint">懶得重打的東西存這裡。點「放上去」再點位置，省一次輸入。用不到就空著。</p>
+      <div id="fieldList" class="field-list"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>圖片</h2>
+        <label class="link-btn">
+          ＋ 加入圖片
+          <input type="file" id="imgInput" accept="image/*" hidden multiple>
+        </label>
+      </div>
+      <p class="hint">簽名檔、身分證正反面。存在這台電腦的瀏覽器裡，不會上傳。</p>
+      <div id="imgList" class="img-list"></div>
+    </section>
+
+    <section class="panel">
+      <h2>符號</h2>
+      <p class="hint">點一下，再點 PDF 上的位置。</p>
+      <div class="symbol-row" id="symbolRow">
+        <button class="btn btn-small" data-sym="✓">✓</button>
+        <button class="btn btn-small" data-sym="✗">✗</button>
+        <button class="btn btn-small" data-sym="○">○</button>
+        <button class="btn btn-small" data-sym="—">—</button>
+      </div>
+    </section>
+
+    <section class="panel panel-muted">
+      <h2>快捷鍵</h2>
+      <dl class="keys">
+        <dt>雙擊文字</dt><dd>改字</dd>
+        <dt>方向鍵</dt><dd>微調位置</dd>
+        <dt>Shift ＋ 方向鍵</dt><dd>大步移動</dd>
+        <dt>Delete</dt><dd>刪掉選中的</dd>
+        <dt>Esc</dt><dd>取消</dd>
+      </dl>
+    </section>
+
+  </aside>
+
+  <main class="stage" id="stage">
+    <div class="empty-state" id="emptyState">
+      <div class="empty-inner">
+        <div class="empty-icon">📄</div>
+        <h3>把 PDF 拖進來</h3>
+        <p>或按右上角「開啟 PDF」</p>
+      </div>
+    </div>
+    <div class="pages" id="pages"></div>
+  </main>
+
+</div>
+
+<!-- 選取元素後的浮動工具列 -->
+<div class="floating-bar" id="floatBar" hidden>
+  <div class="fb-group" id="fbTextGroup">
+    <button class="fb-btn" data-act="size-down" title="縮小字">A−</button>
+    <span class="fb-val" id="fbSize">14</span>
+    <button class="fb-btn" data-act="size-up" title="放大字">A＋</button>
+    <span class="fb-sep"></span>
+    <button class="fb-btn fb-edit" data-act="edit">改字</button>
+  </div>
+  <div class="fb-group" id="fbImgGroup">
+    <button class="fb-btn" data-act="scale-down" title="縮小">−</button>
+    <span class="fb-val" id="fbScale">100%</span>
+    <button class="fb-btn" data-act="scale-up" title="放大">＋</button>
+  </div>
+  <span class="fb-sep"></span>
+  <button class="fb-btn fb-del" data-act="delete" title="刪除">刪除</button>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="lib/pdf.js"></script>
+<script src="lib/pdf-lib.min.js"></script>
+<script>window.__PDFJS_WORKER_SRC = 'lib/pdf.worker.js';</script>
+<script src="app.js"></script>
+</body>
+</html>

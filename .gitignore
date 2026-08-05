@@ -1,0 +1,7 @@
+.DS_Store
+node_modules/
+
+# 測試用的檔案，可能含個資，不要進版控
+_test/
+*.pdf
+!範例/*.pdf
