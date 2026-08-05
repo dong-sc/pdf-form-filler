@@ -56,7 +56,15 @@ ${body}
 </html>
 `;
 
-const target = path.join(DIR, '勞報單填寫工具.html');
-fs.writeFileSync(target, out);
+const mb = (Buffer.byteLength(out) / 1024 / 1024).toFixed(2);
 
-console.log(`已產生 ${path.basename(target)}  ${(Buffer.byteLength(out) / 1024 / 1024).toFixed(2)} MB`);
+// 給本機用的：雙擊就開
+fs.writeFileSync(path.join(DIR, '勞報單填寫工具.html'), out);
+
+// 給 Cloudflare Pages 用的：整個網站就這一頁
+const dist = path.join(DIR, 'dist');
+fs.mkdirSync(dist, { recursive: true });
+fs.writeFileSync(path.join(dist, 'index.html'), out);
+fs.copyFileSync(path.join(DIR, '_headers'), path.join(dist, '_headers'));
+
+console.log(`已產生 勞報單填寫工具.html 與 dist/index.html  ${mb} MB`);

@@ -1132,7 +1132,8 @@ async function openPdfInner(file) {
   hideFloatBar();
 
   // pdf.js 會接管（detach）傳進去的 buffer，所以給它一份複本
-  const doc = await pdfjsLib.getDocument({ data: buf.slice(0) }).promise;
+  // isEvalSupported: false —— 讓 pdf.js 不要用 eval，才能在嚴格的 CSP 下運作
+  const doc = await pdfjsLib.getDocument({ data: buf.slice(0), isEvalSupported: false }).promise;
 
   el.pages.replaceChildren();
   state.pages = [];

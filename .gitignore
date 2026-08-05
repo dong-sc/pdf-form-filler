@@ -5,3 +5,4 @@ node_modules/
 _test/
 *.pdf
 !範例/*.pdf
+dist/
