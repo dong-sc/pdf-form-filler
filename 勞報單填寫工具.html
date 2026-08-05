@@ -37,13 +37,91 @@ body {
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+
+  /* 直向排列：品牌條、工具列、主體、頁尾。
+     主體用 flex:1 撐開，就不必為了上下多幾條而回頭改高度計算。 */
+  display: flex;
+  flex-direction: column;
+}
+
+/* 只給螢幕閱讀器看的說明文字 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 h2, h3 { margin: 0; font-weight: 600; }
 
+/* ---------- Dong Tools 品牌條 ---------- */
+
+/* 這條在淺色與深色模式都維持深色，跨工具才是同一條 */
+.dong-tools-bar {
+  flex: none;
+  background: #111111;
+  color: #ffffff;
+  border-bottom: 1px solid #282828;
+}
+
+.dong-tools-bar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 44px;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 0 28px;
+}
+
+.dong-tools-brand,
+.dong-tools-hub-link {
+  display: inline-flex;
+  align-items: center;
+  color: inherit;
+  text-decoration: none;
+}
+
+.dong-tools-brand {
+  gap: 9px;
+  font-size: 0.86rem;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+
+.dong-tools-brand img {
+  width: 23px;
+  height: 23px;
+  border-radius: 6px;
+}
+
+.dong-tools-hub-link {
+  gap: 5px;
+  color: #a3a3a3;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.dong-tools-brand:hover,
+.dong-tools-hub-link:hover { color: #ffffff; }
+
+.dong-tools-brand:focus-visible,
+.dong-tools-hub-link:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid #ffffff;
+  outline-offset: 4px;
+}
+
 /* ---------- 頂列 ---------- */
 
 .topbar {
+  flex: none;
   height: var(--topbar-h);
   display: flex;
   align-items: center;
@@ -118,7 +196,8 @@ label.btn:has(input:disabled) { opacity: 0.4; }
 
 .layout {
   display: flex;
-  height: calc(100% - var(--topbar-h));
+  flex: 1;
+  min-height: 0;   /* 沒有這行，內部的捲動區會把版面撐破 */
 }
 
 .sidebar {
@@ -463,6 +542,40 @@ label.btn:has(input:disabled) { opacity: 0.4; }
   margin: 0 3px;
 }
 
+/* ---------- 頁尾 ---------- */
+
+.site-footer {
+  flex: none;
+  padding: 7px 14px calc(8px + env(safe-area-inset-bottom, 0px));
+  text-align: center;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ink-faint);
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+
+.site-footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.site-footer a:hover { text-decoration: underline; }
+
+.site-footer a:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.site-footer strong { font-weight: 600; color: var(--ink-soft); }
+.site-footer .dot { margin: 0 6px; opacity: 0.5; }
+
+/* 視窗矮的時候，頁尾那句廣告詞先讓位給工作區 */
+@media (max-height: 620px) {
+  .site-footer { display: none; }
+}
+
 /* ---------- 提示 ---------- */
 
 .toast {
@@ -505,6 +618,20 @@ label.btn:has(input:disabled) { opacity: 0.4; }
 </style>
 </head>
 <body>
+
+<nav class="dong-tools-bar" aria-label="Dong Tools 品牌導覽">
+  <div class="dong-tools-bar-inner">
+    <a class="dong-tools-brand" href="https://tools.donglinphoto.com/" target="_blank" rel="noopener noreferrer">
+      <img alt="" src="data:image/png;base64,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">
+      <span>Dong Tools</span>
+      <span class="sr-only">（另開新分頁）</span>
+    </a>
+    <a class="dong-tools-hub-link" href="https://tools.donglinphoto.com/" target="_blank" rel="noopener noreferrer">
+      所有工具 <span aria-hidden="true">↗</span>
+      <span class="sr-only">（另開新分頁）</span>
+    </a>
+  </div>
+</nav>
 
 <header class="topbar">
   <div class="brand">勞報單填寫工具</div>
@@ -583,6 +710,14 @@ label.btn:has(input:disabled) { opacity: 0.4; }
   </main>
 
 </div>
+
+<footer class="site-footer">
+  <span>© <span id="year">2026</span> <strong>Dong Lin Photo</strong></span>
+  <span class="dot" aria-hidden="true">·</span>
+  <a href="https://donglinphoto.com" target="_blank" rel="noopener noreferrer">donglinphoto.com<span class="sr-only">（另開新分頁）</span></a>
+  <span class="dot" aria-hidden="true">·</span>
+  <span>單子填完了，也順便看看照片？攝影作品、拍攝委託與更多資訊，歡迎到網站逛逛。</span>
+</footer>
 
 <!-- 選取元素後的浮動工具列 -->
 <div class="floating-bar" id="floatBar" hidden>
@@ -1785,6 +1920,9 @@ el.stage.addEventListener('drop', async (e) => {
    ============================================================ */
 
 (async function init() {
+  const yearEl = document.getElementById('year');
+  if (yearEl) yearEl.textContent = String(new Date().getFullYear());
+
   state.fields = loadFields();
   renderFields();
 

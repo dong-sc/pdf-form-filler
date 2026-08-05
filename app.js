@@ -1110,6 +1110,9 @@ el.stage.addEventListener('drop', async (e) => {
    ============================================================ */
 
 (async function init() {
+  const yearEl = document.getElementById('year');
+  if (yearEl) yearEl.textContent = String(new Date().getFullYear());
+
   state.fields = loadFields();
   renderFields();
 
