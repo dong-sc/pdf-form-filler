@@ -20,10 +20,21 @@ const pdfjs = read('lib/pdf.js');
 const pdflib = read('lib/pdf-lib.min.js');
 const worker = read('lib/pdf.worker.js');
 
-// 取出 <body> 內容（去掉原本的 script 標籤，改用內嵌）
+// 取出 body 內容（去掉原本的 script 標籤，改用內嵌）。
+// 從 </head> 之後才開始找開頭標籤——否則 head 裡只要有註解提到那個標籤名，
+// indexOf 就會抓到註解，把 head 的內容一起切進來。
+const headEnd = html.indexOf('</head>');
+const bodyOpen = html.indexOf('<body>', headEnd) + 6;
+const bodyClose = html.indexOf('</body>', bodyOpen);
+if (headEnd < 0 || bodyOpen < 6 || bodyClose < 0) {
+  throw new Error('index.html 結構不符預期，找不到 body 區段');
+}
+
 const body = html
-  .slice(html.indexOf('<body>') + 6, html.indexOf('</body>'))
+  .slice(bodyOpen, bodyClose)
   .replace(/<script[\s\S]*?<\/script>/gi, '')
+  // 單檔版是獨立的一個檔案，沒有 m/ 目錄，相對連結會壞掉
+  .replace(/href="m\/"/g, 'href="https://simple-pdf.donglinphoto.com/m/"')
   .trim();
 
 const out = `<!doctype html>

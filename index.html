@@ -5,6 +5,25 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>勞報單填寫工具</title>
 <link rel="stylesheet" href="style.css">
+<script>
+/* 手機開這個網址就送去手機版。放在 head 最早執行，才不會先閃一下桌面版。
+   打包成單檔時 build.mjs 只取 <body> 且會剝掉 script，所以這段不會進去
+   ——單檔版沒有 m/ 目錄，導過去只會壞掉。 */
+try {
+  var coarse = matchMedia('(pointer: coarse)').matches;
+  var isPhone = matchMedia('(max-width: 820px)').matches ||
+    (coarse && Math.min(screen.width, screen.height) < 820);
+  if (isPhone && location.protocol !== 'file:') {
+    var full = new URLSearchParams(location.search).get('full');
+    if (full) {
+      try { localStorage.setItem('stayDesktop', '1'); } catch (e) {}
+    }
+    var stay = false;
+    try { stay = !!localStorage.getItem('stayDesktop'); } catch (e) {}
+    if (!stay && !full) location.replace('m/');
+  }
+} catch (e) {}
+</script>
 </head>
 <body>
 
@@ -15,10 +34,15 @@
       <span>Dong Tools</span>
       <span class="sr-only">（另開新分頁）</span>
     </a>
-    <a class="dong-tools-hub-link" href="https://tools.donglinphoto.com/" target="_blank" rel="noopener noreferrer">
-      所有工具 <span aria-hidden="true">↗</span>
-      <span class="sr-only">（另開新分頁）</span>
-    </a>
+    <div class="dong-tools-right">
+      <!-- 點手機版＝改變主意，把「留在電腦版」的記憶清掉，之後用手機開才會自動進手機版 -->
+      <a class="dong-tools-alt-link" href="m/"
+         onclick="try{localStorage.removeItem('stayDesktop')}catch(e){}">📱 手機版</a>
+      <a class="dong-tools-hub-link" href="https://tools.donglinphoto.com/" target="_blank" rel="noopener noreferrer">
+        所有工具 <span aria-hidden="true">↗</span>
+        <span class="sr-only">（另開新分頁）</span>
+      </a>
+    </div>
   </div>
 </nav>
 

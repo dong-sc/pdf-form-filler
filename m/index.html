@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<!-- 允許縮放：手機螢幕小，要對準格子得靠雙指放大 -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover">
+<title>PDF 填寫 手機版 — Dong Lin Photo</title>
+<style>
+:root{
+  --bg:#f4f4f2; --surface:#fff; --ink:#1c1c1a; --ink-soft:#6b6b66; --ink-faint:#9a9a94;
+  --line:#e2e2dd; --accent:#1f5f4f; --accent-soft:#e8f1ee; --sel:#2f7de1; --danger:#a33a2c;
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;}
+html,body{margin:0; height:100%; overscroll-behavior:none;}
+body{
+  display:flex; flex-direction:column;
+  font-family:-apple-system,"PingFang TC","Noto Sans TC",sans-serif;
+  font-size:15px; background:var(--bg); color:var(--ink);
+  -webkit-font-smoothing:antialiased; -webkit-text-size-adjust:100%;
+}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+
+/* ---- Dong Tools 品牌條 ---- */
+.dong-tools-bar{flex:none; background:#111; color:#fff; border-bottom:1px solid #282828;}
+.dong-tools-bar-inner{display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:42px; padding:0 12px;}
+.dong-tools-brand,.dong-tools-hub-link,.dong-tools-alt-link{display:inline-flex; align-items:center; color:inherit; text-decoration:none;}
+.dong-tools-brand{gap:8px; font-size:.84rem; font-weight:750; letter-spacing:-.01em;}
+.dong-tools-brand img{width:21px; height:21px; border-radius:6px;}
+.dong-tools-right{display:flex; align-items:center; gap:12px;}
+.dong-tools-alt-link,.dong-tools-hub-link{gap:4px; color:#a3a3a3; font-size:.76rem; font-weight:650; white-space:nowrap;}
+
+/* ---- 標題與工具列 ---- */
+header{
+  flex:none; display:flex; align-items:center; gap:8px;
+  padding:10px 12px 8px; background:var(--surface); border-bottom:1px solid var(--line);
+}
+header h1{margin:0; font-size:15px; font-weight:650;}
+header .sub{font-size:11px; color:var(--ink-faint); font-weight:400;}
+.spacer{flex:1;}
+
+.toolbar{
+  flex:none; display:flex; gap:8px; padding:10px 12px;
+  background:var(--surface); border-bottom:1px solid var(--line);
+}
+.btn{
+  flex:1; min-height:44px; padding:10px 12px; border-radius:10px;
+  border:1px solid var(--line); background:var(--surface); color:var(--ink);
+  font:inherit; font-size:14px; font-weight:600; cursor:pointer;
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  -webkit-tap-highlight-color:transparent;
+}
+.btn:disabled{opacity:.4;}
+.btn-primary{background:var(--accent); border-color:var(--accent); color:#fff;}
+label.btn{margin:0;}
+
+/* ---- 舞台 ---- */
+.stage{flex:1; min-height:0; overflow:auto; -webkit-overflow-scrolling:touch; padding:10px 0 calc(10px + var(--safe-b));}
+.hintbar{
+  margin:0 12px 10px; padding:10px 12px; border-radius:10px;
+  background:var(--accent-soft); color:var(--ink); font-size:13px; line-height:1.55;
+}
+.hintbar strong{color:var(--accent);}
+.pages{display:flex; flex-direction:column; align-items:center; gap:12px;}
+.page-wrap{position:relative; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.16); flex:none;}
+.page-wrap canvas{display:block; width:100%; height:100%;}
+.overlay{position:absolute; inset:0;}
+
+.empty{
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:6px; padding:64px 24px; color:var(--ink-faint); text-align:center;
+}
+/* 自訂的 display 會蓋掉瀏覽器對 [hidden] 的預設，沒有這行 hidden 等於沒作用 */
+.empty[hidden]{display:none;}
+.empty .big{font-size:38px;}
+.empty h2{margin:0; font-size:16px; color:var(--ink-soft);}
+.empty p{margin:0; font-size:13px;}
+
+/* ---- 放上去的東西 ---- */
+.mark{position:absolute; touch-action:none; user-select:none; transform-origin:top left;}
+.mark::after{content:""; position:absolute; inset:-4px; border:1px dashed transparent; border-radius:3px;}
+.mark.sel::after{border-color:var(--sel); border-style:solid;}
+.mark-text{white-space:pre; color:#111; font-family:"PingFang TC","Noto Sans TC",sans-serif; min-width:1px;}
+.mark-text.editing{
+  outline:none; user-select:text; -webkit-user-select:text;
+  background:rgba(47,125,225,.08); min-width:10px;
+}
+.mark-image img{display:block; width:100%; height:100%; pointer-events:none;}
+
+/* ---- 選中後的操作列（固定在底部，手指好按）---- */
+.actionbar{
+  position:fixed; left:0; right:0; bottom:0; z-index:40;
+  display:flex; gap:6px; padding:8px 10px calc(8px + var(--safe-b));
+  background:#23231f; color:#fff;
+}
+.actionbar[hidden]{display:none;}
+.actionbar button{
+  flex:1; min-height:44px; border:none; border-radius:8px;
+  background:rgba(255,255,255,.14); color:#fff; font:inherit; font-size:14px; font-weight:600;
+  -webkit-tap-highlight-color:transparent;
+}
+.actionbar button.del{background:var(--danger);}
+.actionbar .val{
+  min-width:52px; display:inline-flex; align-items:center; justify-content:center;
+  font-size:13px; color:#c9c9c2; font-variant-numeric:tabular-nums;
+}
+
+.toast{
+  position:fixed; left:50%; bottom:calc(76px + var(--safe-b)); transform:translateX(-50%);
+  z-index:50; max-width:86vw; padding:10px 16px; border-radius:20px;
+  background:#23231f; color:#fff; font-size:13px; text-align:center; pointer-events:none;
+}
+.toast[hidden]{display:none;}
+
+footer{
+  flex:none; padding:8px 12px calc(8px + var(--safe-b));
+  text-align:center; font-size:11px; line-height:1.6; color:var(--ink-faint);
+  background:var(--surface); border-top:1px solid var(--line);
+}
+footer a{color:var(--accent); text-decoration:none;}
+</style>
+</head>
+<body>
+
+<nav class="dong-tools-bar" aria-label="Dong Tools 品牌導覽">
+  <div class="dong-tools-bar-inner">
+    <a class="dong-tools-brand" href="https://tools.donglinphoto.com/" target="_blank" rel="noopener noreferrer">
+      <img alt="" src="data:image/png;base64,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">
+      <span>Dong Tools</span>
+      <span class="sr-only">（另開新分頁）</span>
+    </a>
+    <div class="dong-tools-right">
+      <!-- ?full=1 讓電腦版記住選擇，手機上才不會又被導回這裡 -->
+      <a class="dong-tools-alt-link" href="../?full=1">💻 電腦版</a>
+      <a class="dong-tools-hub-link" href="https://tools.donglinphoto.com/" target="_blank" rel="noopener noreferrer">
+        所有工具 <span aria-hidden="true">↗</span>
+        <span class="sr-only">（另開新分頁）</span>
+      </a>
+    </div>
+  </div>
+</nav>
+
+<header>
+  <h1>PDF 填寫 <span class="sub">手機版</span></h1>
+  <span class="spacer"></span>
+</header>
+
+<div class="toolbar">
+  <label class="btn">
+    開啟 PDF
+    <input type="file" id="pdfInput" accept="application/pdf" hidden>
+  </label>
+  <label class="btn" id="photoLabel">
+    加照片
+    <input type="file" id="imgInput" accept="image/*" hidden>
+  </label>
+  <button class="btn btn-primary" id="exportBtn" disabled>輸出</button>
+</div>
+
+<main class="stage" id="stage">
+  <div class="hintbar" id="hintbar" hidden>
+    在要填的地方<strong>點一下就能打字</strong>。放大用雙指撐開，位置不對就直接拖。
+  </div>
+  <div class="empty" id="empty">
+    <div class="big">📄</div>
+    <h2>先開啟一份 PDF</h2>
+    <p>按上面的「開啟 PDF」</p>
+  </div>
+  <div class="pages" id="pages"></div>
+</main>
+
+<div class="actionbar" id="actionbar" hidden>
+  <button id="minusBtn">−</button>
+  <span class="val" id="sizeVal">12</span>
+  <button id="plusBtn">＋</button>
+  <button id="editBtn">改字</button>
+  <button class="del" id="delBtn">刪除</button>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<footer>
+  © <span id="year">2026</span> <a href="https://donglinphoto.com" target="_blank" rel="noopener noreferrer">Dong Lin Photo</a>
+  ・填的內容只留在這支手機上，關掉就沒了
+</footer>
+
+<script src="../lib/pdf.js"></script>
+<script src="../lib/pdf-lib.min.js"></script>
+<script>
+window.__PDFJS_WORKER_SRC = '../lib/pdf.worker.js';
+</script>
+<script>
+(function () {
+  'use strict';
+
+  var pdfjsLib = window.pdfjsLib;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = window.__PDFJS_WORKER_SRC;
+  var PDFDocument = window.PDFLib.PDFDocument;
+
+  var RENDER_SCALE = 2;      // 背景畫布解析度
+  var EXPORT_SCALE = 3;      // 輸出時標註層解析度
+  var LINE_HEIGHT = 1.2;
+  var TEXT_FONT = '"PingFang TC","Noto Sans TC",-apple-system,sans-serif';
+  var DEFAULT_SIZE = 12;     // PDF point
+  var DEFAULT_IMG_W = 150;   // PDF point
+  var TAP_SLOP = 10;         // 手指移動超過這個距離就當成捲動，不是點擊
+
+  // 手機版刻意不存任何東西：全部只活在這個變數裡，關掉分頁就沒了
+  var S = {
+    fileName: '', pdfBytes: null, cssScale: 1,
+    pages: [], marks: [], images: {}, seq: 0,
+    selectedId: null, editingId: null,
+    pendingImage: null,   // 選好照片、等使用者點位置放上去
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var el = {
+    pdfInput: $('pdfInput'), imgInput: $('imgInput'), exportBtn: $('exportBtn'),
+    stage: $('stage'), pages: $('pages'), empty: $('empty'), hintbar: $('hintbar'),
+    actionbar: $('actionbar'), sizeVal: $('sizeVal'), minusBtn: $('minusBtn'),
+    plusBtn: $('plusBtn'), editBtn: $('editBtn'), delBtn: $('delBtn'), toast: $('toast'),
+  };
+
+  var toastTimer = null;
+  function toast(msg, ms) {
+    el.toast.textContent = msg;
+    el.toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.toast.hidden = true; }, ms || 2200);
+  }
+  function uid() { return Math.random().toString(36).slice(2, 10); }
+  function findMark(id) {
+    for (var i = 0; i < S.marks.length; i++) if (S.marks[i].id === id) return S.marks[i];
+    return null;
+  }
+  function markNode(id) { return el.pages.querySelector('[data-id="' + id + '"]'); }
+
+  /* ---------- 開啟 PDF ---------- */
+
+  el.pdfInput.addEventListener('change', function (e) {
+    var f = e.target.files[0];
+    if (f) openPdf(f);
+    e.target.value = '';
+  });
+
+  function openPdf(file) {
+    stopEditing();
+    var reader = new FileReader();
+    reader.onload = function () {
+      S.pdfBytes = reader.result;
+      S.fileName = file.name.replace(/\.pdf$/i, '');
+      renderPdf(reader.result).catch(function (err) {
+        console.error(err);
+        alert(/password|encrypt/i.test(err.message || '')
+          ? '這份 PDF 有密碼保護，請先存一份沒有密碼的。'
+          : '這份 PDF 打不開：' + err.message);
+      });
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function renderPdf(buf) {
+    S.marks = [];
+    S.selectedId = null;
+    hideActions();
+    el.pages.textContent = '';
+    S.pages = [];
+
+    return pdfjsLib.getDocument({ data: buf.slice(0), isEvalSupported: false }).promise
+      .then(function (doc) {
+        // 頁面寬度填滿螢幕，要對準細格子就靠雙指放大
+        var avail = el.stage.clientWidth - 16;
+        var chain = Promise.resolve();
+
+        for (var n = 1; n <= doc.numPages; n++) {
+          (function (pageNum) {
+            chain = chain.then(function () {
+              return doc.getPage(pageNum).then(function (page) {
+                var vp = page.getViewport({ scale: 1 });
+                if (pageNum === 1) S.cssScale = avail / vp.width;
+
+                var wrap = document.createElement('div');
+                wrap.className = 'page-wrap';
+                wrap.style.width = (vp.width * S.cssScale) + 'px';
+                wrap.style.height = (vp.height * S.cssScale) + 'px';
+
+                var canvas = document.createElement('canvas');
+                var rv = page.getViewport({ scale: RENDER_SCALE });
+                canvas.width = Math.floor(rv.width);
+                canvas.height = Math.floor(rv.height);
+
+                var ov = document.createElement('div');
+                ov.className = 'overlay';
+                ov.dataset.page = String(pageNum);
+
+                wrap.appendChild(canvas);
+                wrap.appendChild(ov);
+                el.pages.appendChild(wrap);
+
+                return page.render({ canvasContext: canvas.getContext('2d'), viewport: rv }).promise
+                  .then(function () {
+                    S.pages.push({ pageNum: pageNum, width: vp.width, height: vp.height, overlayEl: ov });
+                    attachOverlay(ov);
+                  });
+              });
+            });
+          })(n);
+        }
+
+        return chain.then(function () {
+          el.empty.hidden = true;
+          el.hintbar.hidden = false;
+          el.exportBtn.disabled = false;
+          el.stage.scrollTop = 0;
+          toast('已開啟：共 ' + doc.numPages + ' 頁');
+        });
+      });
+  }
+
+  /* ---------- 在 overlay 上點一下 ---------- */
+
+  function attachOverlay(ov) {
+    var start = null;
+
+    ov.addEventListener('pointerdown', function (e) {
+      if (e.target !== ov) return;      // 點在既有標註上，交給它自己處理
+      start = { x: e.clientX, y: e.clientY, t: Date.now() };
+    });
+
+    ov.addEventListener('pointerup', function (e) {
+      if (e.target !== ov || !start) return;
+      var moved = Math.hypot(e.clientX - start.x, e.clientY - start.y);
+      var quick = Date.now() - start.t < 700;
+      start = null;
+      // 手指有滑動就是在捲動或縮放，不要誤開文字框
+      if (moved > TAP_SLOP || !quick) return;
+
+      // 正在打字時點別處：先收掉這格，再接著開下一格。
+      // 只 return 的話，連續填表每格都要點兩次，放照片也會被卡住。
+      if (S.editingId) stopEditing();
+
+      var r = ov.getBoundingClientRect();
+      var x = (e.clientX - r.left) / S.cssScale;
+      var y = (e.clientY - r.top) / S.cssScale;
+      var pageNum = Number(ov.dataset.page);
+
+      if (S.pendingImage) {
+        addImage(pageNum, x, y, S.pendingImage);
+        S.pendingImage = null;
+        return;
+      }
+      var m = addText(pageNum, x, y, '');
+      startEditing(m.id);
+    });
+  }
+
+  /* ---------- 建立與繪製 ---------- */
+
+  function addText(page, x, y, text) {
+    var m = {
+      id: uid(), seq: S.seq++, page: page, kind: 'text',
+      x: x, y: y - DEFAULT_SIZE / 2, text: text, size: DEFAULT_SIZE,
+    };
+    S.marks.push(m);
+    render(m);
+    select(m.id);
+    return m;
+  }
+
+  function addImage(page, x, y, imgId) {
+    var img = S.images[imgId];
+    if (!img) return null;
+    var w = img.lastWidth || DEFAULT_IMG_W;
+    var h = w * (img.h / img.w);
+    var m = {
+      id: uid(), seq: S.seq++, page: page, kind: 'image', imgId: imgId,
+      x: x - w / 2, y: y - h / 2, w: w, h: h,
+    };
+    S.marks.push(m);
+    render(m);
+    select(m.id);
+    return m;
+  }
+
+  function render(m) {
+    var info = null;
+    for (var i = 0; i < S.pages.length; i++) if (S.pages[i].pageNum === m.page) info = S.pages[i];
+    if (!info) return;
+
+    var node = info.overlayEl.querySelector('[data-id="' + m.id + '"]');
+    if (!node) {
+      node = document.createElement('div');
+      node.className = 'mark mark-' + m.kind;
+      node.dataset.id = m.id;
+      attachMark(node);
+      info.overlayEl.appendChild(node);
+    }
+
+    node.style.left = (m.x * S.cssScale) + 'px';
+    node.style.top = (m.y * S.cssScale) + 'px';
+
+    if (m.kind === 'text') {
+      if (S.editingId !== m.id) node.textContent = m.text;
+      node.style.fontSize = (m.size * S.cssScale) + 'px';
+      node.style.fontFamily = TEXT_FONT;
+      node.style.lineHeight = String(LINE_HEIGHT);
+    } else {
+      var img = S.images[m.imgId];
+      node.style.width = (m.w * S.cssScale) + 'px';
+      node.style.height = (m.h * S.cssScale) + 'px';
+      var ie = node.querySelector('img');
+      if (!ie) { ie = document.createElement('img'); node.appendChild(ie); }
+      if (img && ie.src !== img.dataUrl) ie.src = img.dataUrl;
+    }
+    node.classList.toggle('sel', m.id === S.selectedId);
+  }
+
+  /* ---------- 拖曳 ---------- */
+
+  function attachMark(node) {
+    var drag = null;
+
+    node.addEventListener('pointerdown', function (e) {
+      var id = node.dataset.id;
+      if (S.editingId === id) { e.stopPropagation(); return; }  // 編輯中讓游標正常運作
+      e.stopPropagation();
+      e.preventDefault();
+
+      if (S.editingId) stopEditing();
+      var m = findMark(id);
+      if (!m) return;
+      select(id);
+      drag = { x: e.clientX, y: e.clientY, ox: m.x, oy: m.y, moved: false };
+      node.setPointerCapture(e.pointerId);
+    });
+
+    node.addEventListener('pointermove', function (e) {
+      if (!drag) return;
+      var m = findMark(node.dataset.id);
+      if (!m) return;
+      var dx = (e.clientX - drag.x) / S.cssScale;
+      var dy = (e.clientY - drag.y) / S.cssScale;
+      if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) drag.moved = true;
+      m.x = drag.ox + dx;
+      m.y = drag.oy + dy;
+      render(m);
+    });
+
+    function end(e) {
+      if (!drag) return;
+      var wasMoved = drag.moved;
+      drag = null;
+      try { node.releasePointerCapture(e.pointerId); } catch (err) {}
+      // 沒移動＝單純點一下；文字的話直接進入編輯，少一次操作
+      var m = findMark(node.dataset.id);
+      if (!wasMoved && m && m.kind === 'text') startEditing(m.id);
+    }
+    node.addEventListener('pointerup', end);
+    node.addEventListener('pointercancel', end);
+  }
+
+  /* ---------- 就地編輯 ---------- */
+
+  function startEditing(id) {
+    var m = findMark(id), node = markNode(id);
+    if (!m || !node || m.kind !== 'text') return;
+    if (S.editingId && S.editingId !== id) stopEditing();
+
+    S.editingId = id;
+    select(id);
+    node.contentEditable = 'plaintext-only';
+    node.classList.add('editing');
+    node.focus();
+
+    var range = document.createRange();
+    range.selectNodeContents(node);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    if (!m.text) sel.collapseToEnd();
+
+    node.addEventListener('blur', onBlur);
+  }
+
+  function onBlur() { stopEditing(); }
+
+  function stopEditing() {
+    var id = S.editingId;
+    if (!id) return;
+    S.editingId = null;
+
+    var m = findMark(id), node = markNode(id);
+    if (!node) return;
+    node.removeEventListener('blur', onBlur);
+    node.contentEditable = 'false';
+    node.classList.remove('editing');
+
+    var text = (node.textContent || '').replace(/ /g, ' ').replace(/\s+$/, '');
+    if (!text.trim()) { removeMark(id); return; }   // 空的就收掉，誤點不留東西
+    if (m) { m.text = text; render(m); showActions(id); }
+  }
+
+  /* ---------- 選取與底部操作列 ---------- */
+
+  function select(id) {
+    if (S.selectedId && S.selectedId !== id) {
+      var prev = markNode(S.selectedId);
+      if (prev) prev.classList.remove('sel');
+    }
+    S.selectedId = id;
+    if (!id) { hideActions(); return; }
+    var node = markNode(id);
+    if (node) node.classList.add('sel');
+    showActions(id);
+  }
+
+  function showActions(id) {
+    var m = findMark(id);
+    if (!m) return hideActions();
+    var isText = m.kind === 'text';
+    el.editBtn.hidden = !isText;
+    el.sizeVal.textContent = isText ? String(Math.round(m.size)) : Math.round(m.w) + 'pt';
+    el.actionbar.hidden = false;
+  }
+
+  function hideActions() { el.actionbar.hidden = true; }
+
+  function removeMark(id) {
+    if (S.editingId === id) S.editingId = null;
+    var node = markNode(id);
+    if (node && node.parentNode) node.parentNode.removeChild(node);
+    S.marks = S.marks.filter(function (m) { return m.id !== id; });
+    if (S.selectedId === id) { S.selectedId = null; hideActions(); }
+  }
+
+  el.delBtn.addEventListener('click', function () {
+    if (S.selectedId) removeMark(S.selectedId);
+  });
+
+  el.editBtn.addEventListener('click', function () {
+    if (S.selectedId) startEditing(S.selectedId);
+  });
+
+  function resize(dir) {
+    var m = findMark(S.selectedId);
+    if (!m) return;
+    if (m.kind === 'text') {
+      m.size = Math.max(5, Math.min(72, m.size + dir));
+    } else {
+      var f = dir > 0 ? 1.12 : 1 / 1.12;
+      var cx = m.x + m.w / 2, cy = m.y + m.h / 2;
+      m.w = Math.max(20, m.w * f);
+      m.h = Math.max(20, m.h * f);
+      m.x = cx - m.w / 2;
+      m.y = cy - m.h / 2;
+      var img = S.images[m.imgId];
+      if (img) img.lastWidth = m.w;    // 記住這張圖慣用大小，同一次操作內有效
+    }
+    render(m);
+    showActions(m.id);
+  }
+  el.plusBtn.addEventListener('click', function () { resize(1); });
+  el.minusBtn.addEventListener('click', function () { resize(-1); });
+
+  /* ---------- 加照片 ---------- */
+
+  el.imgInput.addEventListener('change', function (e) {
+    var f = e.target.files[0];
+    e.target.value = '';
+    if (!f || !S.pages.length) {
+      if (!S.pages.length) toast('請先開啟一份 PDF');
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function () {
+      shrink(reader.result).then(function (out) {
+        var id = uid();
+        S.images[id] = { dataUrl: out.dataUrl, w: out.w, h: out.h, lastWidth: DEFAULT_IMG_W };
+        S.pendingImage = id;
+        toast('點一下要放照片的位置', 3200);
+      }).catch(function () { toast('這張圖讀不開'); });
+    };
+    reader.readAsDataURL(f);
+  });
+
+  // 手機拍的照片動輒四千像素，先縮再說；有透明背景（簽名檔）就維持 PNG
+  function shrink(url) {
+    return loadImage(url).then(function (img) {
+      var max = 1800;
+      var s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      var w = Math.round(img.naturalWidth * s), h = Math.round(img.naturalHeight * s);
+      var c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      var ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      var transparent = false;
+      try {
+        var d = ctx.getImageData(0, 0, w, h).data;
+        for (var i = 3; i < d.length; i += 4) { if (d[i] < 250) { transparent = true; break; } }
+      } catch (e) { transparent = true; }
+      return {
+        dataUrl: transparent ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.88),
+        w: w, h: h,
+      };
+    });
+  }
+
+  function loadImage(src) {
+    return new Promise(function (res, rej) {
+      var i = new Image();
+      i.onload = function () { res(i); };
+      i.onerror = function () { rej(new Error('圖片載入失敗')); };
+      i.src = src;
+    });
+  }
+
+  /* ---------- 輸出 ---------- */
+
+  el.exportBtn.addEventListener('click', function () { exportPdf(); });
+
+  function exportPdf() {
+    if (!S.pdfBytes) return;
+    stopEditing();
+
+    el.exportBtn.disabled = true;
+    var label = el.exportBtn.textContent;
+    el.exportBtn.textContent = '產生中…';
+
+    PDFDocument.load(S.pdfBytes.slice(0)).then(function (out) {
+      var outPages = out.getPages();
+      var jobs = Promise.resolve();
+
+      outPages.forEach(function (outPage, i) {
+        var pageMarks = S.marks.filter(function (m) { return m.page === i + 1; });
+        if (!pageMarks.length) return;
+        var info = S.pages[i];
+
+        jobs = jobs.then(function () {
+          var box = outPage.getCropBox();
+          var rotation = ((outPage.getRotation().angle % 360) + 360) % 360;
+
+          var layer = document.createElement('canvas');
+          layer.width = Math.round(info.width * EXPORT_SCALE);
+          layer.height = Math.round(info.height * EXPORT_SCALE);
+          var ctx = layer.getContext('2d');
+          ctx.scale(EXPORT_SCALE, EXPORT_SCALE);
+
+          var ordered = pageMarks.sort(function (a, b) { return a.seq - b.seq; });
+          var seq = Promise.resolve();
+
+          ordered.forEach(function (m) {
+            seq = seq.then(function () {
+              if (m.kind === 'text') {
+                ctx.font = m.size + 'px ' + TEXT_FONT;
+                ctx.fillStyle = '#111111';
+                ctx.textBaseline = 'top';
+                m.text.split('\n').forEach(function (line, li) {
+                  ctx.fillText(line, m.x, m.y + li * m.size * LINE_HEIGHT);
+                });
+                return null;
+              }
+              var img = S.images[m.imgId];
+              if (!img) return null;
+              return loadImage(img.dataUrl).then(function (bitmap) {
+                ctx.drawImage(bitmap, m.x, m.y, m.w, m.h);
+              });
+            });
+          });
+
+          return seq.then(function () {
+            var flat = unrotate(layer, rotation, box, EXPORT_SCALE);
+            return out.embedPng(flat.toDataURL('image/png')).then(function (png) {
+              outPage.drawImage(png, { x: box.x, y: box.y, width: box.width, height: box.height });
+            });
+          });
+        });
+      });
+
+      return jobs.then(function () { return out.save(); });
+    }).then(function (bytes) {
+      deliver(new Blob([bytes], { type: 'application/pdf' }), (S.fileName || '文件') + '-已填.pdf');
+    }).catch(function (err) {
+      console.error(err);
+      alert('輸出失敗：' + err.message);
+    }).then(function () {
+      el.exportBtn.textContent = label;
+      el.exportBtn.disabled = false;
+    });
+  }
+
+  // 頁面若有旋轉，標註層要先轉回未旋轉的座標系才對得上
+  function unrotate(layer, rotation, box, scale) {
+    if (rotation === 0) return layer;
+    var out = document.createElement('canvas');
+    out.width = Math.round(box.width * scale);
+    out.height = Math.round(box.height * scale);
+    var ctx = out.getContext('2d');
+    if (rotation === 90) { ctx.translate(0, out.height); ctx.rotate(-Math.PI / 2); }
+    else if (rotation === 180) { ctx.translate(out.width, out.height); ctx.rotate(Math.PI); }
+    else if (rotation === 270) { ctx.translate(out.width, 0); ctx.rotate(Math.PI / 2); }
+    ctx.drawImage(layer, 0, 0);
+    return out;
+  }
+
+  /* 手機上「下載」常常不好用，能分享就走分享（存到檔案、傳 LINE、寄信都在這裡） */
+  function deliver(blob, filename) {
+    var file = null;
+    try { file = new File([blob], filename, { type: 'application/pdf' }); } catch (e) {}
+
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: filename })
+        .catch(function () { download(blob, filename); });
+      return;
+    }
+    download(blob, filename);
+  }
+
+  function download(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+    toast('已輸出，檢查一下有沒有跑位');
+  }
+
+  /* ---------- 起始 ---------- */
+
+  $('year').textContent = String(new Date().getFullYear());
+})();
+</script>
+</body>
+</html>

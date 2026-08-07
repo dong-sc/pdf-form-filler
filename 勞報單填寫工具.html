@@ -81,7 +81,8 @@ h2, h3 { margin: 0; font-weight: 600; }
 }
 
 .dong-tools-brand,
-.dong-tools-hub-link {
+.dong-tools-hub-link,
+.dong-tools-alt-link {
   display: inline-flex;
   align-items: center;
   color: inherit;
@@ -101,18 +102,28 @@ h2, h3 { margin: 0; font-weight: 600; }
   border-radius: 6px;
 }
 
-.dong-tools-hub-link {
+.dong-tools-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.dong-tools-hub-link,
+.dong-tools-alt-link {
   gap: 5px;
   color: #a3a3a3;
   font-size: 0.78rem;
   font-weight: 650;
+  white-space: nowrap;
 }
 
 .dong-tools-brand:hover,
-.dong-tools-hub-link:hover { color: #ffffff; }
+.dong-tools-hub-link:hover,
+.dong-tools-alt-link:hover { color: #ffffff; }
 
 .dong-tools-brand:focus-visible,
-.dong-tools-hub-link:focus-visible {
+.dong-tools-hub-link:focus-visible,
+.dong-tools-alt-link:focus-visible {
   border-radius: 3px;
   outline: 2px solid #ffffff;
   outline-offset: 4px;
@@ -406,6 +417,9 @@ label.btn:has(input:disabled) { opacity: 0.4; }
   pointer-events: none;
 }
 
+/* 自訂的 display 會蓋掉瀏覽器對 [hidden] 的預設，沒有這行 hidden 等於沒作用 */
+.empty-state[hidden] { display: none; }
+
 .empty-inner { text-align: center; color: var(--ink-faint); }
 .empty-icon { font-size: 40px; margin-bottom: 8px; }
 .empty-inner h3 { font-size: 15px; color: var(--ink-soft); margin-bottom: 4px; }
@@ -628,10 +642,15 @@ label.btn:has(input:disabled) { opacity: 0.4; }
       <span>Dong Tools</span>
       <span class="sr-only">（另開新分頁）</span>
     </a>
-    <a class="dong-tools-hub-link" href="https://tools.donglinphoto.com/" target="_blank" rel="noopener noreferrer">
-      所有工具 <span aria-hidden="true">↗</span>
-      <span class="sr-only">（另開新分頁）</span>
-    </a>
+    <div class="dong-tools-right">
+      <!-- 點手機版＝改變主意，把「留在電腦版」的記憶清掉，之後用手機開才會自動進手機版 -->
+      <a class="dong-tools-alt-link" href="https://simple-pdf.donglinphoto.com/m/"
+         onclick="try{localStorage.removeItem('stayDesktop')}catch(e){}">📱 手機版</a>
+      <a class="dong-tools-hub-link" href="https://tools.donglinphoto.com/" target="_blank" rel="noopener noreferrer">
+        所有工具 <span aria-hidden="true">↗</span>
+        <span class="sr-only">（另開新分頁）</span>
+      </a>
+    </div>
   </div>
 </nav>
 

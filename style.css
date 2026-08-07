@@ -74,7 +74,8 @@ h2, h3 { margin: 0; font-weight: 600; }
 }
 
 .dong-tools-brand,
-.dong-tools-hub-link {
+.dong-tools-hub-link,
+.dong-tools-alt-link {
   display: inline-flex;
   align-items: center;
   color: inherit;
@@ -94,18 +95,28 @@ h2, h3 { margin: 0; font-weight: 600; }
   border-radius: 6px;
 }
 
-.dong-tools-hub-link {
+.dong-tools-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.dong-tools-hub-link,
+.dong-tools-alt-link {
   gap: 5px;
   color: #a3a3a3;
   font-size: 0.78rem;
   font-weight: 650;
+  white-space: nowrap;
 }
 
 .dong-tools-brand:hover,
-.dong-tools-hub-link:hover { color: #ffffff; }
+.dong-tools-hub-link:hover,
+.dong-tools-alt-link:hover { color: #ffffff; }
 
 .dong-tools-brand:focus-visible,
-.dong-tools-hub-link:focus-visible {
+.dong-tools-hub-link:focus-visible,
+.dong-tools-alt-link:focus-visible {
   border-radius: 3px;
   outline: 2px solid #ffffff;
   outline-offset: 4px;
@@ -398,6 +409,9 @@ label.btn:has(input:disabled) { opacity: 0.4; }
   justify-content: center;
   pointer-events: none;
 }
+
+/* 自訂的 display 會蓋掉瀏覽器對 [hidden] 的預設，沒有這行 hidden 等於沒作用 */
+.empty-state[hidden] { display: none; }
 
 .empty-inner { text-align: center; color: var(--ink-faint); }
 .empty-icon { font-size: 40px; margin-bottom: 8px; }
