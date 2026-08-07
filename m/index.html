@@ -118,6 +118,8 @@ footer{
   background:var(--surface); border-top:1px solid var(--line);
 }
 footer a{color:var(--accent); text-decoration:none;}
+footer .visits{color:var(--accent);}
+footer .visits[hidden]{display:none;}
 </style>
 </head>
 <body>
@@ -181,7 +183,7 @@ footer a{color:var(--accent); text-decoration:none;}
 
 <footer>
   © <span id="year">2026</span> <a href="https://donglinphoto.com" target="_blank" rel="noopener noreferrer">Dong Lin Photo</a>
-  ・填的內容只留在這支手機上，關掉就沒了
+  ・填的內容只留在這支手機上，關掉就沒了<span id="visits" class="visits" hidden></span>
 </footer>
 
 <script src="../lib/pdf.js"></script>
@@ -730,6 +732,18 @@ window.__PDFJS_WORKER_SRC = '../lib/pdf.worker.js';
   /* ---------- 起始 ---------- */
 
   $('year').textContent = String(new Date().getFullYear());
+
+  /* 使用次數：跟電腦版共用同一個 namespace，一支工具就是一個數字，不分裝置。
+     送出去的只有「有人開了這一頁」，不含任何填寫內容；失敗就安靜隱藏。 */
+  fetch('https://abacus.jasoncameron.dev/hit/donglinphoto-pdf-fill/visits')
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || !d.value) return;
+      var v = $('visits');
+      v.textContent = '・✍️ 已代填 ' + d.value.toLocaleString() + ' 份沒人想填的表';
+      v.hidden = false;
+    })
+    .catch(function () {});
 })();
 </script>
 </body>
