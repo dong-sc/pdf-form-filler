@@ -563,6 +563,8 @@ label.btn:has(input:disabled) { opacity: 0.4; }
 
 .site-footer strong { font-weight: 600; color: var(--ink-soft); }
 .site-footer .dot { margin: 0 6px; opacity: 0.5; }
+.site-footer .visits { color: var(--accent); }
+.site-footer .visits[hidden] { display: none; }
 
 /* 視窗矮的時候，頁尾那句廣告詞先讓位給工作區 */
 @media (max-height: 620px) {

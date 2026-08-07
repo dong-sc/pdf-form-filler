@@ -570,6 +570,8 @@ label.btn:has(input:disabled) { opacity: 0.4; }
 
 .site-footer strong { font-weight: 600; color: var(--ink-soft); }
 .site-footer .dot { margin: 0 6px; opacity: 0.5; }
+.site-footer .visits { color: var(--accent); }
+.site-footer .visits[hidden] { display: none; }
 
 /* 視窗矮的時候，頁尾那句廣告詞先讓位給工作區 */
 @media (max-height: 620px) {
@@ -717,6 +719,7 @@ label.btn:has(input:disabled) { opacity: 0.4; }
   <a href="https://donglinphoto.com" target="_blank" rel="noopener noreferrer">donglinphoto.com<span class="sr-only">（另開新分頁）</span></a>
   <span class="dot" aria-hidden="true">·</span>
   <span>單子填完了，也順便看看照片？攝影作品、拍攝委託與更多資訊，歡迎到網站逛逛。</span>
+  <span id="visits" class="visits" hidden></span>
 </footer>
 
 <!-- 選取元素後的浮動工具列 -->
@@ -1919,9 +1922,27 @@ el.stage.addEventListener('drop', async (e) => {
    啟動
    ============================================================ */
 
+/* 頁尾的使用次數。純計數，送出去的只有「有人開了這一頁」，
+   不含任何你填的內容。服務掛掉或被擋就安靜隱藏，不影響工具本身。 */
+function showVisits() {
+  const el = document.getElementById('visits');
+  if (!el) return;
+
+  fetch('https://abacus.jasoncameron.dev/hit/donglinphoto-pdf-fill/visits')
+    .then((r) => r.json())
+    .then((d) => {
+      if (!d || !d.value) return;
+      el.textContent = `・✍️ 已代填 ${d.value.toLocaleString()} 份沒人想填的表`;
+      el.hidden = false;
+    })
+    .catch(() => {});
+}
+
 (async function init() {
   const yearEl = document.getElementById('year');
   if (yearEl) yearEl.textContent = String(new Date().getFullYear());
+
+  showVisits();
 
   state.fields = loadFields();
   renderFields();

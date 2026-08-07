@@ -1109,9 +1109,27 @@ el.stage.addEventListener('drop', async (e) => {
    啟動
    ============================================================ */
 
+/* 頁尾的使用次數。純計數，送出去的只有「有人開了這一頁」，
+   不含任何你填的內容。服務掛掉或被擋就安靜隱藏，不影響工具本身。 */
+function showVisits() {
+  const el = document.getElementById('visits');
+  if (!el) return;
+
+  fetch('https://abacus.jasoncameron.dev/hit/donglinphoto-pdf-fill/visits')
+    .then((r) => r.json())
+    .then((d) => {
+      if (!d || !d.value) return;
+      el.textContent = `・✍️ 已代填 ${d.value.toLocaleString()} 份沒人想填的表`;
+      el.hidden = false;
+    })
+    .catch(() => {});
+}
+
 (async function init() {
   const yearEl = document.getElementById('year');
   if (yearEl) yearEl.textContent = String(new Date().getFullYear());
+
+  showVisits();
 
   state.fields = loadFields();
   renderFields();
