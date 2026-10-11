@@ -24,6 +24,7 @@ const worker = read('lib/pdf.worker.js');
 // 從 </head> 之後才開始找開頭標籤——否則 head 裡只要有註解提到那個標籤名，
 // indexOf 就會抓到註解，把 head 的內容一起切進來。
 const headEnd = html.indexOf('</head>');
+const identityIcons = (html.slice(0, headEnd).match(/<link\b[^>]*data-tool-icon[^>]*>/g) || []).join('\n');
 const bodyOpen = html.indexOf('<body>', headEnd) + 6;
 const bodyClose = html.indexOf('</body>', bodyOpen);
 if (headEnd < 0 || bodyOpen < 6 || bodyClose < 0) {
@@ -42,7 +43,8 @@ const out = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>勞報單填寫工具</title>
+<title>Fill · PDF 填寫工具 — Dong Tools</title>
+${identityIcons}
 <style>
 ${css}
 </style>

@@ -89,11 +89,8 @@ h2, h3 { margin: 0; font-weight: 600; }
   letter-spacing: -0.01em;
 }
 
-.dong-tools-brand img {
-  width: 23px;
-  height: 23px;
-  border-radius: 6px;
-}
+.dong-tools-brand img{width:32px;height:32px;flex-shrink:0;}
+.dong-tools-family{color:#b7bbb7;font-size:.7rem;font-weight:500;}
 
 .dong-tools-right {
   display: flex;
