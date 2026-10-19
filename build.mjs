@@ -24,6 +24,8 @@ const worker = read('lib/pdf.worker.js');
 // 從 </head> 之後才開始找開頭標籤——否則 head 裡只要有註解提到那個標籤名，
 // indexOf 就會抓到註解，把 head 的內容一起切進來。
 const headEnd = html.indexOf('</head>');
+// Keep page metadata and the guide styling in the bundled output as well.
+const seoHead = (html.slice(0, headEnd).match(/<title>[^]*?<\/title>|<meta\b[^>]*(?:name="(?:description|robots|twitter:[^"]+)"|property="og:[^"]+")[^>]*>|<link\b[^>]*rel="canonical"[^>]*>|<script type="application\/ld\+json">[^]*?<\/script>|<style>\s*\.tool-guide[^]*?<\/style>/g) || []).join('\n');
 const identityIcons = (html.slice(0, headEnd).match(/<link\b[^>]*data-tool-icon[^>]*>/g) || []).join('\n');
 const bodyOpen = html.indexOf('<body>', headEnd) + 6;
 const bodyClose = html.indexOf('</body>', bodyOpen);
@@ -43,7 +45,7 @@ const out = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Fill · PDF 填寫工具 — Dong Tools</title>
+${seoHead}
 ${identityIcons}
 <style>
 ${css}
@@ -79,5 +81,9 @@ const dist = path.join(DIR, 'dist');
 fs.mkdirSync(dist, { recursive: true });
 fs.writeFileSync(path.join(dist, 'index.html'), out);
 fs.copyFileSync(path.join(DIR, '_headers'), path.join(dist, '_headers'));
+for (const name of ['robots.txt', 'sitemap.xml']) {
+  fs.copyFileSync(path.join(DIR, name), path.join(dist, name));
+}
+fs.cpSync(path.join(DIR, 'identity'), path.join(dist, 'identity'), { recursive: true });
 
 console.log(`已產生 勞報單填寫工具.html 與 dist/index.html  ${mb} MB`);
