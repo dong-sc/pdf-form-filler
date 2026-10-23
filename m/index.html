@@ -270,78 +270,118 @@ window.__PDFJS_WORKER_SRC = '../lib/pdf.worker.js';
     e.target.value = '';
   });
 
-  function openPdf(file) {
-    stopEditing();
-    var reader = new FileReader();
-    reader.onload = function () {
-      S.pdfBytes = reader.result;
-      S.fileName = file.name.replace(/\.pdf$/i, '');
-      renderPdf(reader.result).catch(function (err) {
-        console.error(err);
-        alert(/password|encrypt/i.test(err.message || '')
-          ? '這份 PDF 有密碼保護，請先存一份沒有密碼的。'
-          : '這份 PDF 打不開：' + err.message);
-      });
-    };
-    reader.readAsArrayBuffer(file);
+  // Same bounds as desktop: keep eager PDF rendering finite on mobile too.
+  var MAX_PDF_BYTES = 25 * 1024 * 1024;
+  var MAX_PDF_PAGES = 100;
+  var MAX_PAGE_PIXELS = 16 * 1024 * 1024;
+  var MAX_DOCUMENT_PIXELS = 40 * 1024 * 1024;
+  var pdfLoadVersion = 0;
+  var activePdfReader = null;
+  var activePdfTask = null;
+
+  function releasePageCanvases(pages) {
+    pages.forEach(function (page) {
+      var canvas = page.wrapEl.querySelector('canvas');
+      if (canvas) { canvas.width = 0; canvas.height = 0; }
+    });
   }
 
-  function renderPdf(buf) {
-    S.marks = [];
-    S.selectedId = null;
-    hideActions();
-    el.pages.textContent = '';
-    S.pages = [];
+  function openPdf(file) {
+    if (!file) return Promise.resolve();
+    var version = ++pdfLoadVersion;
+    if (activePdfReader && activePdfReader.readyState === 1) activePdfReader.abort();
+    if (activePdfTask) activePdfTask.destroy().catch(function () {});
+    if (file.size > MAX_PDF_BYTES) {
+      alert('檔案超過 25 MB，請先縮小或分割 PDF 再開啟。');
+      return Promise.resolve();
+    }
+    var reader = new FileReader();
+    activePdfReader = reader;
+    return new Promise(function (resolve, reject) {
+      reader.onload = function () { resolve(reader.result); };
+      reader.onerror = function () { reject(reader.error || new Error('檔案讀取失敗')); };
+      reader.onabort = function () { reject(new Error('檔案讀取已取消')); };
+      reader.readAsArrayBuffer(file);
+    }).then(function (buf) {
+      if (version !== pdfLoadVersion) return;
+      return renderPdf(buf, file.name, version);
+    }).catch(function (err) {
+      if (version !== pdfLoadVersion) return;
+      console.error(err);
+      alert(/password|encrypt/i.test(err.message || '')
+        ? '這份 PDF 有密碼保護，請先存一份沒有密碼的。'
+        : '這份 PDF 打不開：' + err.message);
+    }).finally(function () {
+      if (activePdfReader === reader) activePdfReader = null;
+    });
+  }
 
-    return pdfjsLib.getDocument({ data: buf.slice(0), isEvalSupported: false }).promise
-      .then(function (doc) {
-        // 頁面寬度填滿螢幕，要對準細格子就靠雙指放大
-        var avail = el.stage.clientWidth - 16;
-        var chain = Promise.resolve();
-
-        for (var n = 1; n <= doc.numPages; n++) {
-          (function (pageNum) {
-            chain = chain.then(function () {
-              return doc.getPage(pageNum).then(function (page) {
-                var vp = page.getViewport({ scale: 1 });
-                if (pageNum === 1) S.cssScale = avail / vp.width;
-
-                var wrap = document.createElement('div');
-                wrap.className = 'page-wrap';
-                wrap.style.width = (vp.width * S.cssScale) + 'px';
-                wrap.style.height = (vp.height * S.cssScale) + 'px';
-
-                var canvas = document.createElement('canvas');
-                var rv = page.getViewport({ scale: RENDER_SCALE });
-                canvas.width = Math.floor(rv.width);
-                canvas.height = Math.floor(rv.height);
-
-                var ov = document.createElement('div');
-                ov.className = 'overlay';
-                ov.dataset.page = String(pageNum);
-
-                wrap.appendChild(canvas);
-                wrap.appendChild(ov);
-                el.pages.appendChild(wrap);
-
-                return page.render({ canvasContext: canvas.getContext('2d'), viewport: rv }).promise
-                  .then(function () {
-                    S.pages.push({ pageNum: pageNum, width: vp.width, height: vp.height, overlayEl: ov });
-                    attachOverlay(ov);
-                  });
-              });
-            });
-          })(n);
+  async function renderPdf(buf, fileName, version) {
+    var task = pdfjsLib.getDocument({ data: buf.slice(0), isEvalSupported: false });
+    activePdfTask = task;
+    var pages = [];
+    var committed = false;
+    var cssScale = 1;
+    try {
+      var doc = await task.promise;
+      if (doc.numPages > MAX_PDF_PAGES) throw new Error('PDF 超過 100 頁，請先分割檔案再開啟。');
+      var totalPixels = 0;
+      var avail = el.stage.clientWidth - 16;
+      for (var n = 1; n <= doc.numPages; n++) {
+        if (version !== pdfLoadVersion) return;
+        var page = await doc.getPage(n);
+        if (version !== pdfLoadVersion) return;
+        var vp = page.getViewport({ scale: 1 });
+        if (n === 1) cssScale = avail / vp.width;
+        var wrap = document.createElement('div');
+        wrap.className = 'page-wrap';
+        wrap.style.width = (vp.width * cssScale) + 'px';
+        wrap.style.height = (vp.height * cssScale) + 'px';
+        var rv = page.getViewport({ scale: RENDER_SCALE });
+        var width = Math.floor(rv.width), height = Math.floor(rv.height);
+        var pixels = width * height;
+        if (!Number.isFinite(pixels) || width <= 0 || height <= 0 || pixels > MAX_PAGE_PIXELS || totalPixels + pixels > MAX_DOCUMENT_PIXELS) {
+          throw new Error('PDF 頁面尺寸或總解析度過大，請先縮小或分割檔案再開啟。');
         }
-
-        return chain.then(function () {
-          el.empty.hidden = true;
-          el.hintbar.hidden = false;
-          el.exportBtn.disabled = false;
-          el.stage.scrollTop = 0;
-          toast('已開啟：共 ' + doc.numPages + ' 頁');
-        });
-      });
+        totalPixels += pixels;
+        var canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        var ov = document.createElement('div');
+        ov.className = 'overlay';
+        ov.dataset.page = String(n);
+        wrap.appendChild(canvas);
+        wrap.appendChild(ov);
+        pages.push({ pageNum: n, width: vp.width, height: vp.height,
+          wrapEl: wrap, overlayEl: ov });
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport: rv }).promise;
+        page.cleanup();
+        attachOverlay(ov);
+      }
+      if (version !== pdfLoadVersion) return;
+      // Keep the current document and edits until the entire replacement is ready.
+      stopEditing();
+      hideActions();
+      releasePageCanvases(S.pages);
+      S.pdfBytes = buf;
+      S.fileName = fileName.replace(/\.pdf$/i, '');
+      S.marks = [];
+      S.selectedId = null;
+      S.pendingImage = null;
+      S.cssScale = cssScale;
+      S.pages = pages;
+      el.pages.replaceChildren.apply(el.pages, pages.map(function (page) { return page.wrapEl; }));
+      committed = true;
+      el.empty.hidden = true;
+      el.hintbar.hidden = false;
+      el.exportBtn.disabled = exportingPdf;
+      el.stage.scrollTop = 0;
+      toast('已開啟：共 ' + doc.numPages + ' 頁');
+    } finally {
+      if (!committed) releasePageCanvases(pages);
+      if (activePdfTask === task) activePdfTask = null;
+      await task.destroy().catch(function () {});
+    }
   }
 
   /* ---------- 在 overlay 上點一下 ---------- */
@@ -645,22 +685,31 @@ window.__PDFJS_WORKER_SRC = '../lib/pdf.worker.js';
 
   el.exportBtn.addEventListener('click', function () { exportPdf(); });
 
+  var exportingPdf = false;
+
   function exportPdf() {
-    if (!S.pdfBytes) return;
+    if (!S.pdfBytes || exportingPdf) return Promise.resolve();
     stopEditing();
 
+    var snapshot = {
+      pdfBytes: S.pdfBytes, fileName: S.fileName,
+      marks: S.marks.map(function (mark) { return Object.assign({}, mark); }),
+      pages: S.pages.map(function (page) { return { width: page.width, height: page.height }; }),
+      images: Object.assign({}, S.images),
+    };
+    exportingPdf = true;
     el.exportBtn.disabled = true;
     var label = el.exportBtn.textContent;
     el.exportBtn.textContent = '產生中…';
 
-    PDFDocument.load(S.pdfBytes.slice(0)).then(function (out) {
+    return PDFDocument.load(snapshot.pdfBytes.slice(0)).then(function (out) {
       var outPages = out.getPages();
       var jobs = Promise.resolve();
 
       outPages.forEach(function (outPage, i) {
-        var pageMarks = S.marks.filter(function (m) { return m.page === i + 1; });
+        var pageMarks = snapshot.marks.filter(function (m) { return m.page === i + 1; });
         if (!pageMarks.length) return;
-        var info = S.pages[i];
+        var info = snapshot.pages[i];
 
         jobs = jobs.then(function () {
           var box = outPage.getCropBox();
@@ -686,7 +735,7 @@ window.__PDFJS_WORKER_SRC = '../lib/pdf.worker.js';
                 });
                 return null;
               }
-              var img = S.images[m.imgId];
+              var img = snapshot.images[m.imgId];
               if (!img) return null;
               return loadImage(img.dataUrl).then(function (bitmap) {
                 ctx.drawImage(bitmap, m.x, m.y, m.w, m.h);
@@ -705,11 +754,12 @@ window.__PDFJS_WORKER_SRC = '../lib/pdf.worker.js';
 
       return jobs.then(function () { return out.save(); });
     }).then(function (bytes) {
-      deliver(new Blob([bytes], { type: 'application/pdf' }), (S.fileName || '文件') + '-已填.pdf');
+      deliver(new Blob([bytes], { type: 'application/pdf' }), (snapshot.fileName || '文件') + '-已填.pdf');
     }).catch(function (err) {
       console.error(err);
       alert('輸出失敗：' + err.message);
     }).then(function () {
+      exportingPdf = false;
       el.exportBtn.textContent = label;
       el.exportBtn.disabled = false;
     });

@@ -1282,6 +1282,12 @@ function syncArmedUI() {
    載入 PDF
    ============================================================ */
 
+// Bound compressed input and eager canvas allocations before requesting large buffers.
+const MAX_PDF_BYTES = 25 * 1024 * 1024;
+const MAX_PDF_PAGES = 100;
+const MAX_PAGE_PIXELS = 16 * 1024 * 1024;
+const MAX_DOCUMENT_PIXELS = 40 * 1024 * 1024;
+
 let pdfLoadVersion = 0;
 let activePdfTask = null;
 
@@ -1298,6 +1304,7 @@ async function openPdf(file) {
   // Stop the superseded worker/render without letting its rejection affect this load.
   if (activePdfTask) activePdfTask.destroy().catch(() => {});
   try {
+    if (file.size > MAX_PDF_BYTES) throw new Error('檔案超過 25 MB，請先縮小或分割 PDF 再開啟。');
     await openPdfInner(file, version);
   } catch (err) {
     if (version !== pdfLoadVersion) return;
@@ -1322,6 +1329,8 @@ async function openPdfInner(file, version) {
   let committed = false;
   try {
     const doc = await task.promise;
+    if (doc.numPages > MAX_PDF_PAGES) throw new Error('PDF 超過 100 頁，請先分割檔案再開啟。');
+    let totalPixels = 0;
     for (let n = 1; n <= doc.numPages; n++) {
       if (version !== pdfLoadVersion) return;
       const page = await doc.getPage(n);
@@ -1331,10 +1340,16 @@ async function openPdfInner(file, version) {
       wrap.className = 'page-wrap';
       wrap.style.width = `${viewport.width * CSS_SCALE}px`;
       wrap.style.height = `${viewport.height * CSS_SCALE}px`;
-      const canvas = document.createElement('canvas');
       const rv = page.getViewport({ scale: RENDER_SCALE });
-      canvas.width = Math.floor(rv.width);
-      canvas.height = Math.floor(rv.height);
+      const width = Math.floor(rv.width), height = Math.floor(rv.height);
+      const pixels = width * height;
+      if (!Number.isFinite(pixels) || width <= 0 || height <= 0 || pixels > MAX_PAGE_PIXELS || totalPixels + pixels > MAX_DOCUMENT_PIXELS) {
+        throw new Error('PDF 頁面尺寸或總解析度過大，請先縮小或分割檔案再開啟。');
+      }
+      totalPixels += pixels;
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
       const overlay = document.createElement('div');
       overlay.className = 'overlay';
       overlay.dataset.page = String(n);

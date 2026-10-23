@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const fs = require('node:fs');
 const source = fs.readFileSync(process.env.APP_SOURCE || 'app.js', 'utf8');
-const section = source.slice(source.indexOf('let pdfLoadVersion') >= 0 ? source.indexOf('let pdfLoadVersion') : source.indexOf('async function openPdf(file)'), source.indexOf('/* ============================================================\n   放置與操作標註'));
+const section = source.slice(source.indexOf('const MAX_PDF_BYTES') >= 0 ? source.indexOf('const MAX_PDF_BYTES') : source.indexOf('async function openPdf(file)'), source.indexOf('/* ============================================================\n   放置與操作標註'));
 function deferred() { let resolve; const promise = new Promise(r => resolve = r); return { promise, resolve }; }
 function setup() {
   const canvases = [], tasks = [], alerts = [];
@@ -19,8 +19,8 @@ function setup() {
     stopEditing() {}, disarm() {}, hideFloatBar() {}, toast() {}, onOverlayMouseDown() {},
     pdfjsLib: { getDocument({ data }) {
       const id = new Uint8Array(data)[0]; const task = { destroyed: 0, destroy() { this.destroyed++; return Promise.resolve(); } };
-      task.promise = id === 0 ? Promise.reject(new Error('corrupt')) : Promise.resolve({ numPages: id === 3 ? 2 : 1,
-        async getPage(n) { return { getViewport({scale}) { return { width: (id * 100) * scale, height: 200 * scale }; }, cleanup() {},
+      task.promise = id === 0 ? Promise.reject(new Error('corrupt')) : Promise.resolve({ numPages: id === 5 ? 101 : id === 7 ? 3 : id === 3 ? 2 : 1,
+        async getPage(n) { return { getViewport({scale}) { return { width: (id === 6 ? 5000 : id === 7 ? 2000 : id * 100) * scale, height: (id === 6 ? 5000 : id === 7 ? 2000 : 200) * scale }; }, cleanup() {},
           render() { return { promise: id === 2 ? renderGate.promise : id === 3 && n === 2 ? Promise.reject(new Error('render failure')) : Promise.resolve() }; } }; } });
       tasks.push(task); return task;
     } } });
@@ -51,3 +51,23 @@ test('slower file read cannot start obsolete PDF worker', async () => {
   await h.open(h.file(1)); h.renderGate.resolve(); read.resolve(new Uint8Array([2]).buffer); await first;
   assert.equal(h.tasks.length, 1); assert.equal(h.state.fileName, 'doc1');
 });
+
+test('oversized file is rejected before reading; original remains retryable', async () => {
+  const h = setup(); let reads = 0;
+  await h.open({name:'oversized.pdf',size:25*1024*1024+1,arrayBuffer(){reads++;throw Error('must not read');}});
+  assert.equal(reads,0);assert.equal(h.tasks.length,0);assert.equal(h.state.fileName,'original');
+  assert.equal(h.state.marks[0].text,'preserve');assert.match(h.alerts[0],/25 MB/);
+  await h.open(h.file(1));assert.equal(h.state.fileName,'doc1');
+});
+for (const [id, hint, allocated] of [[5,/100 頁/,0],[6,/尺寸或總解析度/,0],[7,/尺寸或總解析度/,2]]) {
+  test(`PDF resource limit ${id} preserves old document and releases staging`, async () => {
+    const h = setup(); const previous = {...h.state};await h.open(h.file(id));
+    assert.equal(h.state.pdfBytes,previous.pdfBytes);assert.equal(h.state.marks,previous.marks);
+    assert.equal(h.state.pages,previous.pages);assert.match(h.alerts[0],hint);
+    assert.ok(h.tasks[0].destroyed>=1);
+    assert.equal(h.canvases.slice(1).filter(c=>c.width>0||c.height>0).length,0);
+    // At most the bounded preceding pages were rendered, never the over-budget page.
+    assert.equal(h.canvases.slice(1).length,allocated);
+    await h.open(h.file(1));assert.equal(h.state.fileName,'doc1');
+  });
+}
