@@ -1282,77 +1282,94 @@ function syncArmedUI() {
    載入 PDF
    ============================================================ */
 
+let pdfLoadVersion = 0;
+let activePdfTask = null;
+
+function releasePageCanvases(pages) {
+  for (const page of pages) {
+    const canvas = page.wrapEl.querySelector('canvas');
+    if (canvas) { canvas.width = 0; canvas.height = 0; }
+  }
+}
+
 async function openPdf(file) {
   if (!file) return;
+  const version = ++pdfLoadVersion;
+  // Stop the superseded worker/render without letting its rejection affect this load.
+  if (activePdfTask) activePdfTask.destroy().catch(() => {});
   try {
-    await openPdfInner(file);
+    await openPdfInner(file, version);
   } catch (err) {
+    if (version !== pdfLoadVersion) return;
     console.error(err);
-    // 加密、損毀、或根本不是 PDF——要講出來，不能默默停在空畫面
     const hint = /password|encrypt/i.test(err.message || '')
       ? '這份 PDF 有密碼保護，請先用「預覽程式」另存一份沒有密碼的。'
       : `這份 PDF 打不開：${err.message}`;
-    el.emptyState.hidden = false;
+    // Keep the previous document and its edits usable after a failed replacement.
+    el.emptyState.hidden = state.pages.length > 0;
     alert(hint);
   }
 }
 
-async function openPdfInner(file) {
-  stopEditing();
-
+async function openPdfInner(file, version) {
   const buf = await file.arrayBuffer();
-  state.pdfBytes = buf;
-  state.fileName = file.name.replace(/\.pdf$/i, '');
-  state.marks = [];
-  state.selectedId = null;
-  hideFloatBar();
+  if (version !== pdfLoadVersion) return;
 
-  // pdf.js 會接管（detach）傳進去的 buffer，所以給它一份複本
-  // isEvalSupported: false —— 讓 pdf.js 不要用 eval，才能在嚴格的 CSP 下運作
-  const doc = await pdfjsLib.getDocument({ data: buf.slice(0), isEvalSupported: false }).promise;
+  // pdf.js detaches its input; preserve the original bytes for export.
+  const task = pdfjsLib.getDocument({ data: buf.slice(0), isEvalSupported: false });
+  activePdfTask = task;
+  const pages = [];
+  let committed = false;
+  try {
+    const doc = await task.promise;
+    for (let n = 1; n <= doc.numPages; n++) {
+      if (version !== pdfLoadVersion) return;
+      const page = await doc.getPage(n);
+      if (version !== pdfLoadVersion) return;
+      const viewport = page.getViewport({ scale: 1 });
+      const wrap = document.createElement('div');
+      wrap.className = 'page-wrap';
+      wrap.style.width = `${viewport.width * CSS_SCALE}px`;
+      wrap.style.height = `${viewport.height * CSS_SCALE}px`;
+      const canvas = document.createElement('canvas');
+      const rv = page.getViewport({ scale: RENDER_SCALE });
+      canvas.width = Math.floor(rv.width);
+      canvas.height = Math.floor(rv.height);
+      const overlay = document.createElement('div');
+      overlay.className = 'overlay';
+      overlay.dataset.page = String(n);
+      wrap.append(canvas, overlay);
+      pages.push({ pageNum: n, width: viewport.width, height: viewport.height,
+        wrapEl: wrap, overlayEl: overlay });
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport: rv }).promise;
+      page.cleanup();
+      overlay.addEventListener('mousedown', onOverlayMouseDown);
+    }
+    if (version !== pdfLoadVersion) return;
 
-  el.pages.replaceChildren();
-  state.pages = [];
-
-  for (let n = 1; n <= doc.numPages; n++) {
-    const page = await doc.getPage(n);
-    const viewport = page.getViewport({ scale: 1 });
-
-    const wrap = document.createElement('div');
-    wrap.className = 'page-wrap';
-    wrap.style.width = `${viewport.width * CSS_SCALE}px`;
-    wrap.style.height = `${viewport.height * CSS_SCALE}px`;
-
-    const canvas = document.createElement('canvas');
-    const rv = page.getViewport({ scale: RENDER_SCALE });
-    canvas.width = Math.floor(rv.width);
-    canvas.height = Math.floor(rv.height);
-
-    const overlay = document.createElement('div');
-    overlay.className = 'overlay';
-    overlay.dataset.page = String(n);
-
-    wrap.append(canvas, overlay);
-    el.pages.append(wrap);
-
-    await page.render({ canvasContext: canvas.getContext('2d'), viewport: rv }).promise;
-
-    state.pages.push({
-      pageNum: n,
-      width: viewport.width,
-      height: viewport.height,
-      wrapEl: wrap,
-      overlayEl: overlay,
-    });
-
-    overlay.addEventListener('mousedown', onOverlayMouseDown);
+    // Commit only a completely rendered document; failed or stale loads never mutate edits.
+    stopEditing();
+    disarm();
+    releasePageCanvases(state.pages);
+    state.pdfBytes = buf;
+    state.fileName = file.name.replace(/\.pdf$/i, '');
+    state.marks = [];
+    state.selectedId = null;
+    hideFloatBar();
+    state.pages = pages;
+    el.pages.replaceChildren(...pages.map((page) => page.wrapEl));
+    committed = true;
+    el.emptyState.hidden = true;
+    el.exportBtn.disabled = exportingPdf;
+    el.clearMarksBtn.disabled = false;
+    el.stage.scrollTop = 0;
+    toast(`已開啟：${file.name}（共 ${doc.numPages} 頁）`);
+  } finally {
+    if (!committed) releasePageCanvases(pages);
+    if (activePdfTask === task) activePdfTask = null;
+    // Rendered canvases are independent of pdf.js; release worker/document caches.
+    await task.destroy().catch(() => {});
   }
-
-  el.emptyState.hidden = true;
-  el.exportBtn.disabled = false;
-  el.clearMarksBtn.disabled = false;
-  el.stage.scrollTop = 0;
-  toast(`已開啟：${file.name}（共 ${doc.numPages} 頁）`);
 }
 
 /* ============================================================
@@ -1670,34 +1687,43 @@ function deleteMark(id) {
    輸出 PDF
    ============================================================ */
 
+let exportingPdf = false;
+
 async function exportPdf() {
-  if (!state.pdfBytes) return;
+  if (!state.pdfBytes || exportingPdf) return;
 
   stopEditing();   // 正在打的字要先落地，否則會漏掉
 
   if (!state.marks.length && !confirm('目前還沒填任何東西，仍要輸出嗎？')) return;
 
+  const snapshot = {
+    pdfBytes: state.pdfBytes, fileName: state.fileName,
+    marks: state.marks.map((mark) => ({ ...mark })),
+    images: state.images.map((image) => ({ ...image })),
+    pages: state.pages.map(({ width, height }) => ({ width, height })),
+  };
+  exportingPdf = true;
   el.exportBtn.disabled = true;
   const originalLabel = el.exportBtn.textContent;
   el.exportBtn.textContent = '產生中…';
 
   try {
-    const out = await PDFDocument.load(state.pdfBytes.slice(0));
+    const out = await PDFDocument.load(snapshot.pdfBytes.slice(0));
     const outPages = out.getPages();
 
     // 先把圖片解碼好，避免在迴圈裡重複做
     const imgCache = new Map();
-    for (const img of state.images) {
-      if (state.marks.some((m) => m.kind === 'image' && m.imgId === img.id)) {
+    for (const img of snapshot.images) {
+      if (snapshot.marks.some((m) => m.kind === 'image' && m.imgId === img.id)) {
         imgCache.set(img.id, await loadImage(img.dataUrl));
       }
     }
 
     for (let i = 0; i < outPages.length; i++) {
-      const pageMarks = state.marks.filter((m) => m.page === i + 1);
+      const pageMarks = snapshot.marks.filter((m) => m.page === i + 1);
       if (!pageMarks.length) continue;
 
-      const pageInfo = state.pages[i];
+      const pageInfo = snapshot.pages[i];
       const outPage = outPages[i];
       const box = outPage.getCropBox();
       const rotation = ((outPage.getRotation().angle % 360) + 360) % 360;
@@ -1739,13 +1765,14 @@ async function exportPdf() {
     const bytes = await out.save();
     downloadBlob(
       new Blob([bytes], { type: 'application/pdf' }),
-      `${state.fileName || '勞報單'}-已填.pdf`,
+      `${snapshot.fileName || '勞報單'}-已填.pdf`,
     );
     toast('已輸出，檢查一下有沒有跑位');
   } catch (err) {
     console.error(err);
     alert(`輸出失敗：${err.message}`);
   } finally {
+    exportingPdf = false;
     el.exportBtn.textContent = originalLabel;
     el.exportBtn.disabled = false;
   }
